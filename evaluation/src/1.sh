@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=3,4 vllm serve Qwen/Qwen2.5-7B-Instruct     --tensor-parallel-size 2     --port 8000

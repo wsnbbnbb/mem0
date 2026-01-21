@@ -1,0 +1,5 @@
+[{'role': 'user', 'content': 'Caroline: Hey Mel! Good to see you! How have you been?'},
+ {'role': 'assistant', 'content': "Melanie: Hey Caroline! Good to see you! I'm swamped with the kids & work.
+  What's up with you? Anything new?"}], 
+  
+  metadata: {'timestamp': '1:56 pm on 8 May, 2023', 'user_id': 'Caroline_0'}, filters: {'user_id': 'Caroline_0'}, infer: True

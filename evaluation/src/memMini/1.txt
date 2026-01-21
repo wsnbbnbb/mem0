@@ -1,0 +1,105 @@
+
+    You are an intelligent memory assistant tasked with retrieving accurate information from conversation memories.
+
+    # CONTEXT:
+    You have access to memories from two speakers in a conversation. These memories contain 
+    timestamped information that may be relevant to answering the question.
+
+    # INSTRUCTIONS:
+    1. Carefully analyze all provided memories from both speakers
+    2. Pay special attention to the timestamps to determine the answer
+    3. If the question asks about a specific event or fact, look for direct evidence in the memories
+    4. If the memories contain contradictory information, prioritize the most recent memory
+    5. If there is a question about time references (like "last year", "two months ago", etc.), 
+       calculate the actual date based on the memory timestamp. For example, if a memory from 
+       4 May 2022 mentions "went to India last year," then the trip occurred in 2021.
+    6. Always convert relative time references to specific dates, months, or years. For example, 
+       convert "last year" to "2022" or "two months ago" to "March 2023" based on the memory 
+       timestamp. Ignore the reference while answering the question.
+    7. Focus only on the content of the memories from both speakers. Do not confuse character 
+       names mentioned in memories with the actual users who created those memories.
+    8. The answer should be less than 5-6 words.
+
+    # APPROACH (Think step by step):
+    1. First, examine all memories that contain information related to the question
+    2. Examine the timestamps and content of these memories carefully
+    3. Look for explicit mentions of dates, times, locations, or events that answer the question
+    4. If the answer requires calculation (e.g., converting relative time references), show your work
+    5. Formulate a precise, concise answer based solely on the evidence in the memories
+    6. Double-check that your answer directly addresses the question asked
+    7. Ensure your final answer is specific and avoids vague time references
+
+    Memories for user Caroline:
+
+    [
+    "12:09 am on 13 September, 2023: Melanie had a good time at the park",
+    "3:19 pm on 28 August, 2023: Melanie went to a show",
+    "1:51 pm on 15 July, 2023: Melanie has been busy",
+    "10:31 am on 13 October, 2023: Melanie said she had a tough time but is doing okay",
+    "10:31 am on 13 October, 2023: Melanie got hurt",
+    "1:50 pm on 17 August, 2023: Melanie will start thinking about what they can do",
+    "3:19 pm on 28 August, 2023: Melanie enjoyed the show",
+    "10:31 am on 13 October, 2023: Melanie had a setback last month",
+    "1:50 pm on 17 August, 2023: Feels grateful having Melanie in my corner",
+    "7:55 pm on 9 June, 2023: Her husband and kids keep Melanie motivated",
+    "8:56 pm on 20 July, 2023: Melanie considers the camping trip the highlight of her summer",
+    "10:31 am on 13 October, 2023: Melanie had to take a break from pottery",
+    "8:18 pm on 6 July, 2023: Melanie wants to know what's new",
+    "1:50 pm on 17 August, 2023: Melanie agrees to plan something special",
+    "7:55 pm on 9 June, 2023: Melanie has a husband and kids",
+    "7:55 pm on 9 June, 2023: Melanie wants to be courageous for her family",
+    "10:31 am on 13 October, 2023: Melanie will do research and prepare emotionally",
+    "8:56 pm on 20 July, 2023: Melanie feels thankful for life because of that memory",
+    "8:56 pm on 20 July, 2023: Melanie feels lucky to share these moments",
+    "4:33 pm on 12 July, 2023: Melanie's pets brighten up their day and always make them smile",
+    "6:55 pm on 20 October, 2023: It was a nice way to relax after the road trip",
+    "1:51 pm on 15 July, 2023: Glad to have Melanie as friend to share journey",
+    "12:09 am on 13 September, 2023: Melanie thinks joyful moments show life's beauty",
+    "6:55 pm on 20 October, 2023: Melanie just did it yesterday",
+    "7:55 pm on 9 June, 2023: Melanie feels like just yesterday she put this dress on",
+    "8:18 pm on 6 July, 2023: Name is Melanie",
+    "8:56 pm on 20 July, 2023: Caroline says Melanie has a beautiful moment",
+    "4:33 pm on 12 July, 2023: Caroline says she is glad it helped Melanie",
+    "1:51 pm on 15 July, 2023: User wishes they had known Melanie back then",
+    "8:56 pm on 20 July, 2023: Melanie has a family camping trip as a summer tradition"
+]
+
+    Memories for user Melanie:
+
+    [
+    "1:51 pm on 15 July, 2023: Melanie is busy",
+    "4:33 pm on 12 July, 2023: Melanie has been running farther to de-stress and it has been great for her headspace",
+    "6:55 pm on 20 October, 2023: After an accident, Melanie has thought a lot about how much she needs her family",
+    "10:31 am on 13 October, 2023: Melanie had a setback last month",
+    "10:31 am on 13 October, 2023: Melanie had to take a break from pottery",
+    "6:55 pm on 20 October, 2023: Melanie wishes she was resilient",
+    "6:55 pm on 20 October, 2023: Melanie values being present and together",
+    "6:55 pm on 20 October, 2023: Melanie is thankful to have her family",
+    "1:51 pm on 15 July, 2023: These moments are some of Melanie's favorite memories",
+    "1:33 pm on 25 August, 2023: Melanie asked what inspired it",
+    "6:55 pm on 20 October, 2023: Melanie asked what's been up since last talk",
+    "1:50 pm on 17 August, 2023: Melanie wants to plan something special",
+    "7:55 pm on 9 June, 2023: Melanie has a husband and kids",
+    "10:31 am on 13 October, 2023: Melanie got hurt last month",
+    "10:31 am on 13 October, 2023: Melanie will do research and prepare emotionally",
+    "6:55 pm on 20 October, 2023: It was a nice way to relax after the road trip",
+    "8:56 pm on 20 July, 2023: Melanie felt like we were part of something huge and awe-inspiring",
+    "1:56 pm on 8 May, 2023: Name is Melanie",
+    "1:14 pm on 25 May, 2023: Melanie is asking for fun plans for summer",
+    "1:14 pm on 25 May, 2023: Melanie has kids excited about summer break",
+    "6:55 pm on 20 October, 2023: Melanie's family means the world to her",
+    "1:14 pm on 25 May, 2023: Melanie is excited for this new chapter",
+    "6:55 pm on 20 October, 2023: Camping helps Melanie reset and recharge",
+    "6:55 pm on 20 October, 2023: Melanie's family enjoyed the Grand Canyon a lot",
+    "10:31 am on 13 October, 2023: Blue calms Melanie",
+    "8:56 pm on 20 July, 2023: Melanie says the sky was clear and filled with stars",
+    "6:55 pm on 20 October, 2023: Family is super important to Melanie",
+    "6:55 pm on 20 October, 2023: Melanie says loved ones give her strength to keep going",
+    "3:19 pm on 28 August, 2023: Playing clarinet is a way for Melanie to relax",
+    "6:55 pm on 20 October, 2023: Melanie enjoys bonding over stories, campfires, and nature with her family, spending quality, tranquil time together."
+]
+
+    Question: What did Melanie do after the road trip to relax?
+
+    Answer:
+    

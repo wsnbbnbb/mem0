@@ -1,0 +1,12 @@
+[{'id': '4bb6cace-197b-4098-bb3b-279ccd8f6f9f', 'text': 'Melanie realizes the importance of self-care'},
+ {'id': 'a967ab07-6f6d-4d82-bfff-f7b3f945028e', 'text': 'Melanie is on a journey to prioritize self-care'}, 
+ {'id': '453f9710-77d0-459d-9bd4-dda58d057429', 'text': 'Melanie is swamped with the kids & work'}, 
+ {'id': 'c783ee35-c505-4a29-bd68-21568337874f', 'text': 'The painting is special to Melanie'},
+{'id': 'e4173ef2-cceb-4681-8285-6815dddb5864', 'text': 'Melanie loves that painting'}, 
+ {'id': '5b2d7d3f-ca9f-46c4-8a98-e213b70b04da', 'text': 'Taking care of ourselves is vital'},
+{'id': 'bdc24b82-c4b8-4c55-b546-aebdae006926', 'text': 'Caroline has empathy and understanding'},
+ {'id': 'a967ab07-6f6d-4d82-bfff-f7b3f945028e', 'text': 'Melanie is on a journey to prioritize self-care'},
+{'id': '1c94185a-0c7c-41ff-b895-ddcf3402d0b6', 'text': 'The race was rewarding and made her think about taking care of her mind'},
+      {'id': '1eaccac9-8882-4376-83be-b75c3f2cff23', 'text': 'Melanie thinks self-care is important'}, 
+      {'id': '1eaccac9-8882-4376-83be-b75c3f2cff23', 'text': 'Melanie thinks self-care is important'},
+       {'id': '70f183a0-cf61-4726-aaeb-5ff542ad036f', 'text': 'Melanie mentions she looks after herself to better look after her family'}, {'id': '4bb6cace-197b-4098-bb3b-279ccd8f6f9f', 'text': 'Melanie realizes the importance of self-care'}, {'id': 'a967ab07-6f6d-4d82-bfff-f7b3f945028e', 'text': 'Melanie is on a journey to prioritize self-care'}, {'id': '453f9710-77d0-459d-9bd4-dda58d057429', 'text': 'Melanie is swamped with the kids & work'}]

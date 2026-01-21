@@ -1,0 +1,77 @@
+// MemorySearch 系统架构图
+digraph {
+	graph [fontname=Arial fontsize=12 rankdir=TB]
+	node [fontname=Arial fontsize=10 style=filled]
+	edge [fontname=Arial fontsize=9]
+	subgraph cluster_input {
+		color=lightyellow label="输入层" style=filled
+		json_file [label="JSON 数据文件
+(对话 + 问题)" fillcolor="#FFD700" shape=folder]
+		env_file [label=".env 文件
+(API 密钥)" fillcolor="#FFD700" shape=folder]
+	}
+	subgraph cluster_processing {
+		color=lightgreen label="处理层" style=filled
+		memory_search [label="MemorySearch 类
+(主控制器)" fillcolor="#87CEEB" shape=component]
+		data_processor [label="数据处理器
+(process_data_file)" fillcolor="#DDA0DD" shape=box]
+		qa_processor [label="问题处理器
+(process_question)" fillcolor="#DDA0DD" shape=box]
+		search_processor [label="搜索处理器
+(search_memory)" fillcolor="#DDA0DD" shape=box]
+	}
+	subgraph cluster_template {
+		color=lightblue label="模板层" style=filled
+		jinja2 [label="Jinja2 模板引擎" fillcolor="#FFD700" shape=component]
+		answer_prompt [label="ANSWER_PROMPT
+(提示词模板)" fillcolor="#98FB98" shape=note]
+		graph_prompt [label="ANSWER_PROMPT_GRAPH
+(图模式模板)" fillcolor="#98FB98" shape=note]
+	}
+	subgraph cluster_memory_layer {
+		color=lightcoral label="记忆层" style=filled
+		mem0_client [label="Mem0Client
+(API 客户端)" fillcolor="#FF6347" shape=component]
+		search_api [label="搜索 API
+(search)" fillcolor="#FFB6C1" shape=database]
+		graph_search [label="图搜索 API
+(enable_graph=True)" fillcolor="#FFB6C1" shape=database]
+	}
+	subgraph cluster_llm_layer {
+		color=lavender label="LLM 层" style=filled
+		openai_client [label="OpenAI 客户端" fillcolor="#FFA500" shape=component]
+		chat_api [label="聊天完成 API
+(chat.completions)" fillcolor="#FFB6C1" shape=database]
+	}
+	subgraph cluster_output {
+		color=lightgray label="输出层" style=filled
+		json_output [label="results.json
+(输出结果)" fillcolor="#98FB98" shape=folder]
+	}
+	subgraph cluster_external {
+		color=gray label="外部服务" style=dashed
+		mem0_cloud [label="Mem0 云服务" fillcolor="#D3D3D3" shape=cloud3]
+		openai_service [label="OpenAI 服务" fillcolor="#E6E6FA" shape=cloud3]
+	}
+	json_file -> memory_search [label="加载"]
+	env_file -> memory_search [label="配置"]
+	memory_search -> data_processor [label="委托"]
+	data_processor -> qa_processor [label="调用"]
+	qa_processor -> search_processor [label="调用"]
+	memory_search -> answer_prompt [label="加载"]
+	memory_search -> graph_prompt [label="加载(图模式)"]
+	qa_processor -> jinja2 [label="使用"]
+	answer_prompt -> jinja2
+	graph_prompt -> jinja2
+	search_processor -> mem0_client [label="调用"]
+	mem0_client -> search_api [label="请求"]
+	mem0_client -> graph_search [label="请求(图模式)"]
+	search_api -> mem0_cloud
+	graph_search -> mem0_cloud
+	qa_processor -> openai_client [label="调用"]
+	openai_client -> chat_api [label="请求"]
+	chat_api -> openai_service
+	qa_processor -> json_output [label="保存"]
+	memory_search -> json_output [label="最终保存"]
+}

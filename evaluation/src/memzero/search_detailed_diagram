@@ -1,0 +1,118 @@
+// MemorySearch 详细流程图
+digraph {
+	graph [fontname=Arial fontsize=11 rankdir=TB splines=ortho]
+	node [fontname=Arial fontsize=9 style=rounded]
+	edge [fontname=Arial fontsize=8]
+	subgraph cluster_main {
+		color=lightyellow label="主流程" style=filled
+		main_start [label="process_data_file()" fillcolor="#90EE90" shape=oval style=filled]
+		load_json [label="json.load(file_path)" fillcolor="#87CEEB" shape=parallelogram style=filled]
+		main_loop_start [label="for idx, item in data" fillcolor="#FF69B4" shape=diamond style=filled]
+		extract_qa [label="qa = item[\"qa\"]
+conversation = item[\"conversation\"]" fillcolor="#FFB6C1" shape=parallelogram style=filled]
+		qa_loop_start [label="for question_item in qa" fillcolor="#FF69B4" shape=diamond style=filled]
+		call_process_q [label="process_question(val,
+speaker_a_user_id,
+speaker_b_user_id)" fillcolor="#98FB98" shape=parallelogram style=filled]
+		save_results [label="json.dump(results, f)" fillcolor="#98FB98" shape=parallelogram style=filled]
+		qa_loop_end [label="继续下个问题?" fillcolor="#FF69B4" shape=diamond style=filled]
+		main_loop_end [label="继续下个对话?" fillcolor="#FF69B4" shape=diamond style=filled]
+		main_start -> load_json
+		load_json -> main_loop_start
+		main_loop_start -> extract_qa
+		extract_qa -> qa_loop_start
+		qa_loop_start -> call_process_q
+		call_process_q -> save_results
+		save_results -> qa_loop_end
+		qa_loop_end -> qa_loop_start [label="是" xlabel=back]
+		qa_loop_end -> main_loop_end [label="否"]
+		main_loop_end -> extract_qa [label="是" xlabel=back]
+		main_loop_end -> main_end [label="否"]
+	}
+	subgraph cluster_process_q {
+		color=lightgreen label="process_question() 方法" style=filled
+		pq_start [label="process_question()" fillcolor="#90EE90" shape=oval style=filled]
+		pq_extract [label="提取问题字段
+question, answer
+category, evidence
+adversarial_answer" fillcolor="#FFB6C1" shape=parallelogram style=filled]
+		call_answer_q [label="answer_question()
+返回多个值" fillcolor="#DDA0DD" shape=parallelogram style=filled]
+		pq_build_result [label="构建结果字典
+包含所有响应数据" fillcolor="#FFD700" shape=parallelogram style=filled]
+		pq_save [label="json.dump(results, f)" fillcolor="#98FB98" shape=parallelogram style=filled]
+		pq_return [label="return result" fillcolor="#FFB6C1" shape=parallelogram style=filled]
+		pq_start -> pq_extract
+		pq_extract -> call_answer_q
+		call_answer_q -> pq_build_result
+		pq_build_result -> pq_save
+		pq_save -> pq_return
+	}
+	subgraph cluster_answer_q {
+		color=lightblue label="answer_question() 方法" style=filled
+		aq_start [label="answer_question()" fillcolor="#90EE90" shape=oval style=filled]
+		aq_search_1 [label="search_memory()
+Speaker 1" fillcolor="#87CEEB" shape=parallelogram style=filled]
+		aq_search_2 [label="search_memory()
+Speaker 2" fillcolor="#87CEEB" shape=parallelogram style=filled]
+		aq_format [label="格式化记忆数据
+时间戳 + 内容" fillcolor="#E6E6FA" style=filled]
+		aq_template [label="Template.render()
+注入变量" fillcolor="#98FB98" shape=parallelogram style=filled]
+		aq_openai [label="OpenAI API 调用
+chat.completions.create()" fillcolor="#FFB6C1" shape=parallelogram style=filled]
+		aq_time_calc [label="计算响应时间" fillcolor="#E6E6FA" style=filled]
+		aq_return [label="return 8 个值" fillcolor="#FFB6C1" shape=parallelogram style=filled]
+		aq_start -> aq_search_1 [label="并行"]
+		aq_start -> aq_search_2 [label="并行"]
+		aq_search_1 -> aq_format
+		aq_search_2 -> aq_format
+		aq_format -> aq_template
+		aq_template -> aq_openai
+		aq_openai -> aq_time_calc
+		aq_time_calc -> aq_return
+	}
+	subgraph cluster_search_mem {
+		color=lightcoral label="search_memory() 方法" style=filled
+		sm_start [label="search_memory()" fillcolor="#90EE90" shape=oval style=filled]
+		sm_time_start [label="start_time = time.time()" fillcolor="#E6E6FA" style=filled]
+		sm_retry_loop [label="while retries < max_retries" fillcolor="#FF69B4" shape=diamond style=filled]
+		sm_check_mode [label="is_graph?" fillcolor="#FFD700" shape=diamond style=filled]
+		sm_graph_call [label="mem0_client.search()
+enable_graph=True
+output_format=v1.1" fillcolor="#DDA0DD" shape=parallelogram style=filled]
+		sm_semantic_call [label="mem0_client.search()
+标准搜索" fillcolor="#DDA0DD" shape=parallelogram style=filled]
+		sm_check_success [label="成功?" fillcolor="#DC143C" shape=diamond style=filled]
+		sm_increment [label="retries += 1" fillcolor="#E6E6FA" style=filled]
+		sm_sleep [label="time.sleep(retry_delay)" fillcolor="#FFA07A" shape=parallelogram style=filled]
+		sm_raise [label="raise error" fillcolor="#8B0000" shape=parallelogram style=filled]
+		sm_time_end [label="end_time = time.time()" fillcolor="#E6E6FA" style=filled]
+		sm_extract [label="提取记忆数据
+memory, timestamp, score" fillcolor="#E6E6FA" style=filled]
+		sm_extract_graph [label="提取图关系
+(如果 is_graph)" fillcolor="#E6E6FA" style=filled]
+		sm_return [label="return
+(semantic_memories,
+graph_memories,
+query_time)" fillcolor="#FFB6C1" shape=parallelogram style=filled]
+		sm_start -> sm_time_start
+		sm_time_start -> sm_retry_loop
+		sm_retry_loop -> sm_check_mode
+		sm_check_mode -> sm_graph_call [label="是"]
+		sm_check_mode -> sm_semantic_call [label="否"]
+		sm_graph_call -> sm_check_success
+		sm_semantic_call -> sm_check_success
+		sm_check_success -> sm_time_end [label="是"]
+		sm_check_success -> sm_increment [label="否"]
+		sm_increment -> sm_sleep
+		sm_sleep -> sm_retry_loop [label=back]
+		sm_retry_loop -> sm_raise [label="失败"]
+		sm_time_end -> sm_extract
+		sm_extract -> sm_extract_graph
+		sm_extract_graph -> sm_return
+	}
+	main_end -> pq_start [label="调用" style=dashed]
+	pq_return -> aq_start [label="调用" style=dashed]
+	aq_return -> sm_start [label="调用" style=dashed]
+}

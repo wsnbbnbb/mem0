@@ -1,0 +1,119 @@
+// MemorySearch 工作流程图
+digraph {
+	graph [fontname=Arial fontsize=12 rankdir=TB splines=ortho]
+	node [fontname=Arial fontsize=10 margin="0.15,0.1" shape=box style=rounded]
+	edge [fontname=Arial fontsize=9]
+	start [label="开始
+初始化 MemorySearch
+设置 top_k, is_graph, filter_memories" fillcolor="#90EE90" shape=oval style=filled]
+	load_env [label="加载环境变量
+(MEM0_API_KEY, MODEL等)" fillcolor="#87CEEB" shape=parallelogram style=filled]
+	init_clients [label="初始化客户端
+Mem0Client
+OpenAI Client" fillcolor="#FFD700" style=filled]
+	load_prompt [label="加载提示词模板
+(ANSWER_PROMPT)" fillcolor="#98FB98" shape=note style=filled]
+	load_data [label="加载 JSON 数据文件
+(包含对话和问题)" fillcolor="#87CEEB" shape=parallelogram style=filled]
+	iterate_conv [label="遍历对话
+(for each conversation)" fillcolor="#FF69B4" shape=diamond style=filled]
+	get_speaker_info [label="获取说话者信息
+speaker_a, speaker_b" fillcolor="#E6E6FA" style=filled]
+	create_user_ids [label="创建用户 ID
+speaker_{idx}" fillcolor="#E6E6FA" style=filled]
+	iterate_qa [label="遍历问题
+(for each question)" fillcolor="#FF69B4" shape=diamond style=filled]
+	extract_question [label="提取问题信息
+question, answer
+category, evidence" fillcolor="#FFB6C1" shape=parallelogram style=filled]
+	search_mem_parallel [label="并行搜索两个用户的记忆" fillcolor="#FFD700" shape=diamond style=filled]
+	search_speaker1 [label="搜索 Speaker 1 记忆
+(search_memory)" fillcolor="#98FB98" shape=parallelogram style=filled]
+	search_speaker2 [label="搜索 Speaker 2 记忆
+(search_memory)" fillcolor="#98FB98" shape=parallelogram style=filled]
+	api_call [label="Mem0 搜索 API
+(top_k, filter_memories)" fillcolor="#87CEEB" shape=parallelogram style=filled]
+	check_mode [label="图模式?
+(is_graph)" fillcolor="#FFD700" shape=diamond style=filled]
+	graph_search [label="图记忆搜索
+(enable_graph=True
+output_format=v1.1)" fillcolor="#DDA0DD" shape=parallelogram style=filled]
+	semantic_search [label="语义搜索
+(标准搜索)" fillcolor="#DDA0DD" shape=parallelogram style=filled]
+	check_retry [label="成功?" fillcolor="#DC143C" shape=diamond style=filled]
+	wait_retry [label="等待后重试
+(time.sleep)" fillcolor="#FFA07A" shape=parallelogram style=filled]
+	raise_error [label="抛出异常
+(raise error)" fillcolor="#8B0000" shape=parallelogram style=filled]
+	extract_memories [label="提取记忆数据
+memory, timestamp, score" fillcolor="#FFD700" style=filled]
+	extract_graph [label="提取图关系
+(source, relationship, target)
+(仅图模式)" fillcolor="#E6E6FA" style=filled]
+	format_results [label="格式化结果
+JSON 格式" fillcolor="#E6E6FA" style=filled]
+	build_prompt [label="构建提示词
+使用 Jinja2 模板
+注入记忆和问题" fillcolor="#FFD700" style=filled]
+	render_template [label="渲染模板
+(Template.render)
+插入记忆数据" fillcolor="#87CEEB" shape=parallelogram style=filled]
+	openai_api [label="调用 OpenAI API
+(chat.completions.create)" fillcolor="#FFB6C1" shape=parallelogram style=filled]
+	set_temperature [label="设置参数
+model, temperature=0.0" fillcolor="#E6E6FA" style=filled]
+	package_result [label="打包结果
+response, memories
+times, graph_memories" fillcolor="#FFD700" style=filled]
+	save_result [label="实时保存
+(json.dump
+to output_path)" fillcolor="#98FB98" shape=parallelogram style=filled]
+	more_qa [label="更多问题?" fillcolor="#FF69B4" shape=diamond style=filled]
+	more_conv [label="更多对话?" fillcolor="#FF69B4" shape=diamond style=filled]
+	final_save [label="最终保存
+所有结果" fillcolor="#98FB98" shape=parallelogram style=filled]
+	end [label="完成
+结果已保存到
+output_path" fillcolor="#90EE90" shape=oval style=filled]
+	start -> load_env
+	load_env -> init_clients
+	init_clients -> load_prompt
+	load_prompt -> load_data
+	load_data -> iterate_conv
+	iterate_conv -> get_speaker_info
+	get_speaker_info -> create_user_ids
+	create_user_ids -> iterate_qa
+	iterate_qa -> extract_question
+	extract_question -> search_mem_parallel
+	search_mem_parallel -> search_speaker1 [label="同时执行"]
+	search_mem_parallel -> search_speaker2 [label="同时执行"]
+	search_speaker1 -> check_mode
+	search_speaker2 -> check_mode
+	check_mode -> graph_search [label="是"]
+	check_mode -> semantic_search [label="否"]
+	graph_search -> api_call
+	semantic_search -> api_call
+	api_call -> check_retry
+	check_retry -> extract_memories [label="是"]
+	check_retry -> wait_retry [label="否"]
+	wait_retry -> api_call [label="重试"]
+	check_retry -> raise_error [label="失败"]
+	extract_memories -> check_mode
+	check_mode -> extract_graph [label="是"]
+	check_mode -> format_results [label="否"]
+	extract_graph -> format_results
+	format_results_from_s1 -> format_results [label="Speaker 1 完成"]
+	format_results_from_s2 -> format_results [label="Speaker 2 完成"]
+	format_results -> build_prompt
+	build_prompt -> render_template
+	render_template -> set_temperature
+	set_temperature -> openai_api
+	openai_api -> package_result
+	package_result -> save_result
+	save_result -> more_qa
+	more_qa -> extract_question [label="是"]
+	more_qa -> more_conv [label="否"]
+	more_conv -> get_speaker_info [label="是"]
+	more_conv -> final_save [label="否"]
+	final_save -> end
+}
