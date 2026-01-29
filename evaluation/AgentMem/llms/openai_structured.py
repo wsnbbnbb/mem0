@@ -2,7 +2,8 @@ import os
 from typing import Dict, List, Optional
 
 from openai import OpenAI
-
+import sys
+sys.path.append("/root/nfs/hmj/proj/mem0/evaluation")
 from AgentMem.configs.llms.base import BaseLlmConfig
 from AgentMem.llms.base import LLMBase
 
@@ -50,3 +51,26 @@ class OpenAIStructuredLLM(LLMBase):
 
         response = self.client.beta.chat.completions.parse(**params)
         return response.choices[0].message.content
+
+
+def test():
+   # LLM 配置
+    config_data = {
+        "model": "arcee-ai/trinity-large-preview:free",
+        # 修改：移除末尾的 "/chat/completions"，只保留基础根路径
+        "openai_base_url": "https://openrouter.ai/api/v1",
+        "api_key": "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",
+        "temperature": 0,
+        "max_tokens": 2000,
+    }
+    
+    # 将字典转换为 BaseLlmConfig 对象
+    config_obj = BaseLlmConfig(**config_data)
+    
+    # 传入对象而不是字典
+    llm=OpenAIStructuredLLM(config=config_obj)
+    
+    resp = llm.generate_response(messages=[{"role": "user", "content": "Hello, world!"}])
+    print(resp)
+if __name__ == "__main__":
+    test()  

@@ -196,6 +196,139 @@ class SQLiteManager:
             for r in rows
         ]
 
+    def get_memory(self, user_id: str, memory_id: str) -> Optional[Dict[str, Any]]:
+        """
+        获取特定内存
+
+        Args:
+            user_id: 用户ID
+            memory_id: 内存ID
+
+        Returns:
+            内存数据或None
+        """
+        with self._lock:
+            cur = self.connection.execute(
+                """
+                SELECT id, memory_id, new_memory, event, created_at, updated_at, is_deleted, actor_id, role
+                FROM history
+                WHERE memory_id = ? AND is_deleted = 0
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (memory_id,),
+            )
+            rows = cur.fetchall()
+
+        if not rows:
+            return None
+
+        r = rows[0]
+        return {
+            "id": r[0],
+            "memory_id": r[1],
+            "text": r[2],
+            "data": r[2],
+            "event": r[3],
+            "created_at": r[4],
+            "updated_at": r[5],
+            "is_deleted": bool(r[6]),
+            "actor_id": r[7],
+            "role": r[8],
+        }
+
+    def get_all_memories(self, user_id: str) -> List[Dict[str, Any]]:
+        """
+        获取用户的所有内存
+
+        Args:
+            user_id: 用户ID
+
+        Returns:
+            内存列表
+        """
+        # 使用更高效的查询方式，避免嵌套子查询
+        with self._lock:
+            cur = self.connection.execute(
+                """
+                SELECT id, memory_id, new_memory, event, created_at, updated_at, is_deleted, actor_id, role
+                FROM history
+                WHERE id IN (
+                    SELECT latest.id
+                    FROM history latest
+                    INNER JOIN (
+                        SELECT memory_id, MAX(created_at) as max_created, MAX(updated_at) as max_updated
+                        FROM history
+                        WHERE is_deleted = 0
+                        GROUP BY memory_id
+                    ) grouped
+                    ON latest.memory_id = grouped.memory_id
+                    AND latest.created_at = grouped.max_created
+                    AND latest.updated_at = grouped.max_updated
+                    AND latest.is_deleted = 0
+                )
+                ORDER BY created_at DESC
+                """
+            )
+            rows = cur.fetchall()
+
+        return [
+            {
+                "id": r[0],
+                "memory_id": r[1],
+                "text": r[2],
+                "data": r[2],
+                "event": r[3],
+                "created_at": r[4],
+                "updated_at": r[5],
+                "is_deleted": bool(r[6]),
+                "actor_id": r[7],
+                "role": r[8],
+            }
+            for r in rows
+        ]
+
+    def get_recent_memories(self, user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        获取最近的内存历史
+
+        Args:
+            user_id: 用户ID
+            limit: 返回数量限制
+
+        Returns:
+            历史记录列表
+        """
+        with self._lock:
+            cur = self.connection.execute(
+                """
+                SELECT id, memory_id, old_memory, new_memory, event,
+                       created_at, updated_at, is_deleted, actor_id, role
+                FROM history
+                WHERE is_deleted = 0
+                ORDER BY created_at DESC, updated_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            rows = cur.fetchall()
+
+        return [
+            {
+                "id": r[0],
+                "memory_id": r[1],
+                "old_memory": r[2],
+                "new_memory": r[3],
+                "event": r[4],
+                "created_at": r[5],
+                "updated_at": r[6],
+                "is_deleted": bool(r[7]),
+                "actor_id": r[8],
+                "role": r[9],
+            }
+            for r in rows
+        ]
+
     def reset(self) -> None:
         """Drop and recreate the history table."""
         with self._lock:

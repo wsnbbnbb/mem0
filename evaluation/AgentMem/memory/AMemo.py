@@ -136,21 +136,24 @@ class Memory(MemoryBase):
             raise ValueError(f"配置验证失败: {e}")
         return cls(config)
     def _create_memory(self, data, existing_embeddings, metadata=None):
-        logger.debug(f"Creating memory with {data=}")
+        logger.debug(f"Creating memory with data={data[:50] if isinstance(data, str) else data}")
         if data in existing_embeddings:
             embeddings = existing_embeddings[data]
         else:
             embeddings = self.embedding_model.embed(data, memory_action="add")
         memory_id = str(uuid.uuid4())
-        metadata = metadata or {}
-        metadata["data"] = data
-        metadata["hash"] = hashlib.md5(data.encode()).hexdigest()
-        metadata["created_at"] = datetime.now(pytz.timezone("US/Pacific")).isoformat()
+        payload = metadata or {}
+        payload["data"] = data  # 用于检索时获取文本
+        payload["text"] = data   # 兼容性字段
+        payload["hash"] = hashlib.md5(data.encode()).hexdigest()
+        payload["created_at"] = datetime.now(pytz.timezone("US/Pacific")).isoformat()
+        
+        logger.debug(f"Inserting memory {memory_id} with user_id={payload.get('user_id')}")
 
         self.vector_store.insert(
             vectors=[embeddings],
             ids=[memory_id],
-            payloads=[metadata],
+            payloads=[payload],
         )
         self.db.add_history(
             memory_id,
@@ -163,9 +166,13 @@ class Memory(MemoryBase):
         )
         capture_event("mem0._create_memory", self, {"memory_id": memory_id, "sync_type": "sync"})
         return memory_id
-    def add(self, user_id: str, messages: str, metadata: Optional[Dict[str, Any]] = None) -> str:
+    def add(self, messages: str, user_id: str, metadata: Optional[Dict[str, Any]] = None) -> str:
         """
         [创新点 1: 写入 - 双重编码]：存储文本向量，并同时进行符号提取和图存储。
+        Args:
+            messages: 消息列表，每个消息是字典格式 {"role": "user", "content": "...", ...}
+            user_id: 用户ID
+            metadata: 额外的元数据
         """
         
         # # 1. 向量存储 (Vector Storage)
@@ -191,7 +198,8 @@ class Memory(MemoryBase):
                 if message_dict["role"] == "system":
                     continue
 
-                per_msg_meta = deepcopy(metadata)
+                per_msg_meta = deepcopy(metadata) or {}
+                per_msg_meta["user_id"] = user_id  # 确保 user_id 被包含
                 per_msg_meta["role"] = message_dict["role"]
 
                 actor_name = message_dict.get("name")
@@ -245,27 +253,67 @@ class Memory(MemoryBase):
         # 1. 语义通道：初次向量检索 (Vector Search)
         query_embedding = self.embedding_model.embed(query)
         
-        # 假设 vector_store.search 返回 (text, metadata, score)
-        candidate_results: List[Tuple[str, Dict[str, Any], float]] = self.vector_store.search(
+        candidate_results = self.vector_store.search(
             query = query, 
             vectors = query_embedding,
             limit = limit * 3,  # 提高召回限制，以便后续过滤
             filters={"user_id": user_id}
         )
+        
         if not candidate_results:
+            logger.warning(f"No search results found for query: {query}, user_id: {user_id}")
             return []
-        # print(f"{candidate_results[0]}\n--------------------")
+        
         # 格式化候选记忆，用于 LLM 重排序
         candidate_memories = []
         for result in candidate_results:
-            id = result.id
-            text = result.payload.get("text", "")
-            score = result.score 
-            candidate_memories.append({
-                "memory_id": id,
-                "text": text,
-                "score": round(score, 4) 
-            })
+            # 处理不同类型的结果格式
+            # 1. 如果是对象属性 (result.id, result.payload, result.score)
+            # 2. 或者是字典格式的 payload
+            # 3. payload 中可能用 'data' 键存储文本
+            
+            try:
+                # 获取 payload（包含所有元数据）
+                if hasattr(result, 'payload') and isinstance(result.payload, dict):
+                    payload = result.payload.copy()  # 复制 payload 以避免修改原始数据
+                elif isinstance(result, dict):
+                    payload = result.copy()
+                else:
+                    logger.debug(f"Skipping result: invalid type {type(result)}")
+                    continue
+                
+                # 获取 id
+                mem_id = payload.pop('id', None)
+                if mem_id is None:
+                    mem_id = getattr(result, 'id', None)
+                    if mem_id is None:
+                        logger.debug(f"Skipping result: no id found")
+                        continue
+                
+                # 获取 score
+                score = payload.pop('score', None)
+                if score is None:
+                    score = getattr(result, 'score', 0)
+                
+                # 获取 text (尝试多个可能的键)
+                text = payload.pop('data', None) or payload.pop('text', None) or payload.pop('memory', '')
+                
+                # 跳过空的或无效的记忆
+                if not text or not mem_id:
+                    logger.debug(f"Skipping invalid result: id={mem_id}, text={text[:50] if text else 'empty'}")
+                    continue
+                
+                candidate_memories.append({
+                    "memory_id": mem_id,  # 使用 memory_id 键名以兼容 LLM 重排序
+                    "id": mem_id,  # 同时保留 id 键
+                    "text": text,
+                    "score": round(float(score), 4) if score is not None else 0.0,
+                    # 保留所有其他元数据
+                    **payload
+                })
+            except Exception as e:
+                logger.error(f"Error processing result: {e}, result type: {type(result)}")
+                continue
         
         # 2. 符号通道与推理：重排序与验证 (Re-ranking and Validation)
         
@@ -300,42 +348,33 @@ class Memory(MemoryBase):
             final_memories = []
             logger.info(f"candidate_memories: {candidate_memories}")
             # 创建一个 ID 到原始记忆的映射
-            id_to_memory = {mem['memory_id']: mem for mem in candidate_memories}
+            id_to_memory = {mem['id']: mem for mem in candidate_memories}
             logger.info(f"id_to_memory: {id_to_memory}")
             for item in re_ranked_list[:limit]: # 限制最终输出数量
                 mem_id = item.get('memory_id')
                 logger.info(f"Processing re-ranked memory ID: {mem_id}")
                 if mem_id and mem_id in id_to_memory:
-                    # 查找原始记忆文本和分数
+                    # 查找原始记忆，包含所有元数据
                     original_memory = id_to_memory[mem_id]
-                    final_memories.append({
-                        "id": mem_id,
-                        "text": original_memory['text'],
-                        "score": original_memory['score'],
-                        "rank_reasoning": item.get('reasoning') # 包含重排序的逻辑解释
-                    })
+                    # 保留所有原有字段，只添加 rank_reasoning
+                    final_memory = original_memory.copy()
+                    final_memory["rank_reasoning"] = item.get('reasoning')
+                    final_memories.append(final_memory)
             logger.info(f"Final re-ranked memories: {final_memories}")
             # 如果 LLM 重排序失败或返回空，则回退到原始向量检索结果
-            if not final_memories and candidate_results:
-                print("Warning: LLM re-ranking failed, falling back to top vector results.")
-                return [{
-                    "id": (getattr(res, 'id', None) or (res.payload.get('id') if isinstance(res.payload, dict) else None)),
-                    "text": (res.payload.get('text') if isinstance(res.payload, dict) else getattr(res, 'text', '')),
-                    "score": getattr(res, 'score', None),
-                    "rank_reasoning": "Fallback (LLM re-ranking failure)"
-                } for res in candidate_results[:limit]]
+            if not final_memories and candidate_memories:
+                logger.warning("LLM re-ranking failed or returned empty, falling back to top vector results")
+                return [mem.copy() for mem in candidate_memories[:limit]]
                 
             return final_memories
             
         except Exception as e:
-            print(f"Warning: LLM Re-ranking failed with error: {e}. Falling back to top vector results.")
-            # 失败回退机制
-            return [{
-                "id": (getattr(res, 'id', None) or (res.payload.get('id') if isinstance(res.payload, dict) else None)),
-                "text": (res.payload.get('text') if isinstance(res.payload, dict) else getattr(res, 'text', '')),
-                "score": getattr(res, 'score', None),
-                "rank_reasoning": "Fallback (System Error)"
-            } for res in candidate_results[:limit]]
+            logger.error(f"LLM Re-ranking failed with error: {e}. Falling back to top vector results.")
+            # 失败回退机制 - 为 fallback 结果添加 rank_reasoning
+            return [
+                {**mem.copy(), "rank_reasoning": "Fallback (System Error)"}
+                for mem in candidate_memories[:limit]
+            ]
     # delete, get, get_all, history, update
     def delete(self, user_id: str, memory_id: str) -> bool:
         # 删除向量存储中的记忆
@@ -382,6 +421,21 @@ class Memory(MemoryBase):
         logger.info(f"Deleted {len(memories)} memories")
 
         return {"message": "Memories deleted successfully!"}
+    def _delete_memory(self, memory_id: str):
+        existing_memory = self.vector_store.get(vector_id=memory_id)
+        prev_value = existing_memory.payload["data"]
+        self.vector_store.delete(vector_id=memory_id)
+        self.db.add_history(
+            memory_id,
+            prev_value,
+            None,
+            "DELETE",
+            actor_id=existing_memory.payload.get("actor_id"),
+            role=existing_memory.payload.get("role"),
+            is_deleted=1,
+        )
+        # capture_event("mem0._delete_memory", self, {"memory_id": memory_id, "sync_type": "sync"})
+        return memory_id
     def get(self, user_id: str, memory_id: str) -> Optional[Dict[str, Any]]:
         return self.db.get_memory(user_id, memory_id)
     def get_all(self, user_id: str) -> List[Dict[str, Any]]:
@@ -400,13 +454,14 @@ class Memory(MemoryBase):
 def main():
     config = {
     "llm": {
-        "provider": "ollama",
-        "config": {
-            # "model": "qwen3:8b",
-            "model": "gpt-oss:20b",
-            "temperature": 0.1,
-            "max_tokens": 4096,
-        }
+         "provider": "vllm",
+            "config": {
+            "model": "Qwen/Qwen2.5-7B-Instruct",
+            "vllm_base_url": "http://localhost:8000/v1",
+            "api_key": "vllm-api-key",
+            "temperature": 0,
+            "max_tokens": 2000,
+            },
     },
         "embedder": {"provider": "huggingface", "config": {"model": "all-MiniLM-L6-v2"}},
     # "vector_store": {
@@ -431,15 +486,17 @@ def main():
     print("\n## 📝 1. 测试 ADD (写入对话文本)")
     
     # 示例对话文本 1: 个人事件
-    dialogue_1 = "Melanie: Hey Caroline, since we last chatted, I've had a lot of things happening to me. I ran a charity race for mental health last Saturday – it was really rewarding. Really made me think about taking care of our minds."
-    memory.add(user_id, dialogue_1)
+    dialogue_1 = {"role":"user","content":"Melanie: Hey Caroline, since we last chatted, I've had a lot of things happening to me. I ran a charity race for mental health last Saturday – it was really rewarding. Really made me think about taking care of our minds."}
+    # memory.add(user_id, dialogue_1)
     
     # 示例对话文本 2: 关键事实
-    dialogue_2 = "Melanie: The Q4 Report review is scheduled for next Monday. Caroline: Perfect, I'll block out time for that."
-    new_id = memory.add(user_id, dialogue_2)
+    dialogue_2 = {"role":"user","content": "Melanie: The Q4 Report review is scheduled for next Monday. Caroline: Perfect, I'll block out time for that."}
+    
+     # new_id = memory.add(user_id, dialogue_2)
     
     print(f"-> 已存储两个对话片段 (一个关于慈善跑，一个关于 Q4 报告)")
-    
+    messages = [dialogue_1, dialogue_2]
+    memory.add(messages, user_id=user_id, metadata={"timestamp":"Jan28 2026"})
     # 验证符号提取是否被调用
     # print(f"-> 验证图存储调用: {memory.graph.add_memory_node.called}")
 
@@ -463,6 +520,7 @@ def main():
         print(f"\n- Rank {i+1}: (Score: {result['score']})")
         print(f"  Text: {result['text']}")
         print(f"  Logic: {result['rank_reasoning']}")
+        print(f"  result:  {result}")
         
     # 预期分析：
     # 向量检索会返回 M2 (Q4) 和 M1 (慈善跑)
